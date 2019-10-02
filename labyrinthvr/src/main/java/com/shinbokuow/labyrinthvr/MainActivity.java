@@ -20,10 +20,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.FloatBuffer;
-import java.nio.ShortBuffer;
 
 import javax.microedition.khronos.egl.EGLConfig;
 
@@ -34,6 +30,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     private Properties gvrProperties;
 
     private MeshedRectangle testRect;
+    private Texture wallTexture;
 
     private static final String VERTEX_SHADER_CODE_PATH =
             new String("default_vs.glsl");
@@ -42,6 +39,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
 
     private int objectProgram;
     private int objectPositionParam;
+    private int objectUVParam;
     private int objectModelViewProjectionParam;
 
     private static final float Z_NEAR = 0.01f;
@@ -51,8 +49,6 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     private float[] view;
     private float[] modelViewProjection;
 
-    private FloatBuffer vertexBuffer;
-    private ShortBuffer indiceBuffer;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -108,32 +104,56 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     public void onSurfaceCreated(EGLConfig config) {
         GLES20.glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
+        Log.i("TAG", loadCode(VERTEX_SHADER_CODE_PATH));
+        Log.i("TAG", loadCode(FRAGMENT_SHADER_CODE_PATH));
         objectProgram = Utility.compileProgram(
                 loadCode(VERTEX_SHADER_CODE_PATH),
                 loadCode(FRAGMENT_SHADER_CODE_PATH)
         );
-        //Log.i("TAG", String.valueOf(objectProgram));
+        Log.i("TAG", "objectProgram = " + String.valueOf(objectProgram));
+
         objectPositionParam = GLES20.glGetAttribLocation(
                 objectProgram,
                 "a_Position"
         );
+        Log.i("TAG", "objectPositionParam = " + String.valueOf(objectPositionParam));
+
+        objectUVParam = GLES20.glGetAttribLocation(
+                objectProgram,
+                "a_UV"
+        );
+        Log.i("TAG", "objectUVParam = " + String.valueOf(objectUVParam));
+
         objectModelViewProjectionParam = GLES20.glGetUniformLocation(
                 objectProgram,
                 "u_MVP"
         );
-        //Utility.checkGlError("get objectPositionParam");
-        //Log.i("TAG", String.valueOf(objectPositionParam));
+        Log.i("TAG", "objectMVP = " + String.valueOf(objectModelViewProjectionParam));
 
         float[] testRectCoord = new float[]{
-            /* TopRight */ 1.0f, 1.0f, 0.0f,
-            /* TopLeft */ -1.0f, 1.0f, 0.0f,
-            /* BottomLeft */ -1.0f, -1.0f, 0.0f,
-            /* BottomRight */ 1.0f, -1.0f, 0.0f
+            /* TopRight */ 1.0f, 1.0f, -5.0f,
+            /* TopLeft */ -1.0f, 1.0f, -5.0f,
+            /* BottomLeft */ -1.0f, -1.0f, -5.0f,
+            /* BottomRight */ 1.0f, -1.0f, -5.0f
         };
-        testRect = new MeshedRectangle(testRectCoord, 0);
 
-        Log.i("TAG", this.loadCode(VERTEX_SHADER_CODE_PATH));
-        Log.i("TAG", String.valueOf(testRectCoord.length));
+        testRect = new MeshedRectangle(
+                testRectCoord, 0,
+                objectPositionParam,
+                objectUVParam
+        );
+
+
+        try {
+            wallTexture = new Texture(
+                    this,
+                    "wall.jpg"
+            );
+        }
+        catch (IOException e) {
+            e.printStackTrace();
+        }
+
     }
 
     private String loadCode(String codePath) {
@@ -163,33 +183,6 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         GLES20.glEnable(GLES20.GL_DEPTH_TEST);
         GLES20.glClear(GLES20.GL_DEPTH_BUFFER_BIT | GLES20.GL_COLOR_BUFFER_BIT);
 
-        float[] triangleCoord = new float[]{
-                -0.5f, -0.5f, -1.0f,
-                0.5f, -0.5f, -1.0f,
-                0.0f, 0.5f, -1.0f
-        };
-        //vertexBuffer = FloatBuffer.allocate(9);
-        //for (float _: triangleCoord) { vertexBuffer.put(_); }
-        //vertexBuffer.put(triangleCoord);
-        //vertexBuffer.position(0);
-        ByteBuffer byteVertex = ByteBuffer.allocateDirect(triangleCoord.length * 4);
-        byteVertex.order(ByteOrder.nativeOrder());
-        vertexBuffer = byteVertex.asFloatBuffer();
-        vertexBuffer.put(triangleCoord);
-        vertexBuffer.position(0);
-        short[] triangleIndices = new short[]{
-                0, 1, 2
-        };
-        //indiceBuffer = ShortBuffer.allocate(3);
-        //indiceBuffer.put(triangleIndices);
-        //indiceBuffer.position(0);
-        //for (short _: triangleIndices) { indiceBuffer.put(_); }
-        ByteBuffer byteIndice = ByteBuffer.allocateDirect(triangleIndices.length * 2);
-        byteIndice.order(ByteOrder.nativeOrder());
-        indiceBuffer = byteIndice.asShortBuffer();
-        indiceBuffer.put(triangleIndices);
-        indiceBuffer.position(0);
-
         Matrix.setLookAtM(
                 camera, 0,
                 0.0f, 0.0f, 0.0f,
@@ -211,7 +204,6 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         GLES20.glUseProgram(objectProgram);
         Utility.checkGlError("glUseProgram");
 
-        //Matrix.setIdentityM(modelViewProjection, 0);
         GLES20.glUniformMatrix4fv(
                 objectModelViewProjectionParam,
                 1,
@@ -220,24 +212,9 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         );
         Utility.checkGlError("glUniformMatrix4fv");
 
-        GLES20.glEnableVertexAttribArray(objectPositionParam);
-        GLES20.glVertexAttribPointer(
-                objectPositionParam,
-                3,
-                GLES20.GL_FLOAT,
-                false,
-                0,
-                vertexBuffer
-        );
-        Utility.checkGlError("vertexAttribPointer");
-
-        GLES20.glDrawElements(
-                GLES20.GL_TRIANGLES,
-                indiceBuffer.limit(),
-                GLES20.GL_UNSIGNED_SHORT,
-                indiceBuffer
-        );
-        Utility.checkGlError("glDrawElements");
+        wallTexture.bind();
+        testRect.draw();
+        Utility.checkGlError("testRect.draw()");
     }
 
     @Override

@@ -40,8 +40,14 @@ public class Utility {
         GLES20.glLinkProgram(program);
         int[] linkStatus = new int[1];
         GLES20.glGetProgramiv(program, GLES20.GL_LINK_STATUS, linkStatus, 0);
-        assert(linkStatus[0] == GLES20.GL_TRUE);
-        checkGlError("End of the compileProgram");
+        if (linkStatus[0] != GLES20.GL_TRUE) {
+            String errorMsg = "Unable to link shader program: \n" + GLES20.glGetProgramInfoLog(program);
+            Log.e(TAG, errorMsg);
+            if (HALT_ON_GL_ERROR) {
+                throw new RuntimeException(errorMsg);
+            }
+        }
+        checkGlError("End of compileProgram");
         return program;
     }
 }
