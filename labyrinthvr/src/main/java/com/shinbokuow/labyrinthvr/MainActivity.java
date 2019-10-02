@@ -4,6 +4,7 @@ import android.opengl.GLES20;
 import android.opengl.Matrix;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.MotionEvent;
 
 import com.google.vr.ndk.base.Properties;
 import com.google.vr.ndk.base.Properties.PropertyType;
@@ -20,6 +21,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
 
 import javax.microedition.khronos.egl.EGLConfig;
 
@@ -29,8 +31,14 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
 
     private Properties gvrProperties;
 
-    private MeshedRectangle testRect;
+    private ArrayList<MeshedRectangle> wallRect;
+    private ArrayList<MeshedRectangle> floorRect;
+    private ArrayList<MeshedRectangle> doorRect;
+    private ArrayList<MeshedRectangle> ceilingRect;
+
     private Texture wallTexture;
+    private Texture floorTexture;
+    private Texture doorTexture;
 
     private static final String VERTEX_SHADER_CODE_PATH =
             new String("default_vs.glsl");
@@ -48,8 +56,14 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     private float[] camera;
     private float[] view;
     private float[] modelViewProjection;
+    private float[] cameraPosition;
+    private float[] cameraDirection;
+    private float[] headForwardDirection;
+    //private float[] model;
+    //private float[] modelView;
 
-
+    private boolean isMoving;
+    private long lastTime;
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -64,6 +78,11 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         camera = new float[16];
         view = new float[16];
         modelViewProjection = new float[16];
+        cameraPosition = new float[3];
+        cameraDirection = new float[3];
+        headForwardDirection = new float[3];
+        //model = new float[16];
+        //modelView = new float[16];
     }
 
     public void initialGvrView() {
@@ -130,6 +149,13 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         );
         Log.i("TAG", "objectMVP = " + String.valueOf(objectModelViewProjectionParam));
 
+        cameraPosition[0] = 0.5f;
+        cameraPosition[1] = 0.7f;
+        cameraPosition[2] = 1.5f;
+        cameraDirection[0] = 0.0f;
+        cameraDirection[1] = 0.0f;
+        cameraDirection[2] = 1.0f;
+
         float[] testRectCoord = new float[]{
             /* TopRight */ 1.0f, 1.0f, -5.0f,
             /* TopLeft */ -1.0f, 1.0f, -5.0f,
@@ -137,23 +163,86 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
             /* BottomRight */ 1.0f, -1.0f, -5.0f
         };
 
-        testRect = new MeshedRectangle(
-                testRectCoord, 0,
-                objectPositionParam,
-                objectUVParam
+        doorRect = new ArrayList<>();
+        wallRect = new ArrayList<>();
+        floorRect = new ArrayList<>();
+        ceilingRect = new ArrayList<>();
+        float[] door = new float[] {
+                1.0f, 1.0f, 3.0f,
+                0.0f, 1.0f, 3.0f,
+                0.0f, 0.0f, 3.0f,
+                1.0f, 0.0f, 3.0f
+        };
+        doorRect.add(
+                new MeshedRectangle(
+                        door, 0,
+                        objectPositionParam,
+                        objectUVParam
+                )
         );
-
+        for (int z = 1; z <= 3; ++z) {
+            float[] floor = new float[] {
+                    1.0f, 0.0f, (float)z,
+                    0.0f, 0.0f, (float)z,
+                    0.0f, 0.0f, (float)(z - 1),
+                    1.0f, 0.0f, (float)(z - 1)
+            };
+            floorRect.add(
+                    new MeshedRectangle(
+                            floor, 0,
+                            objectPositionParam,
+                            objectUVParam
+                    )
+            );
+            float[] leftWall = new float[] {
+                    0.0f, 1.0f, (float)z,
+                    0.0f, 1.0f, (float)(z - 1),
+                    0.0f, 0.0f, (float)(z - 1),
+                    0.0f, 0.0f, (float)z
+            };
+            wallRect.add(
+                    new MeshedRectangle(
+                            leftWall, 0,
+                            objectPositionParam,
+                            objectUVParam
+                    )
+            );
+            /* x 1,1,1,1 y 1,1,0,0 z z-1,z,z,z-1 */
+            float[] rightWall = new float[] {
+                    1.0f, 1.0f, (float)(z - 1),
+                    1.0f, 1.0f, (float)z,
+                    1.0f, 0.0f, (float)z,
+                    1.0f, 0.0f, (float)(z - 1)
+            };
+            wallRect.add(
+                    new MeshedRectangle(
+                            rightWall, 0,
+                            objectPositionParam,
+                            objectUVParam
+                    )
+            );
+        }
 
         try {
             wallTexture = new Texture(
                     this,
                     "wall.jpg"
             );
+            floorTexture = new Texture(
+                    this,
+                    "floor.jpg"
+            );
+            doorTexture = new Texture(
+                    this,
+                    "door.jpg"
+            );
         }
         catch (IOException e) {
             e.printStackTrace();
         }
 
+        isMoving = false;
+        lastTime = -1;
     }
 
     private String loadCode(String codePath) {
@@ -176,7 +265,24 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         return code;
     }
     @Override
-    public void onNewFrame(HeadTransform headTransform) {}
+    public void onNewFrame(HeadTransform headTransform) {
+        long currentTime = System.currentTimeMillis();
+
+        headTransform.getForwardVector(
+                headForwardDirection, 0
+        );
+        float r = (float)Math.sqrt(
+                headForwardDirection[0] * headForwardDirection[0] +
+                headForwardDirection[1] * headForwardDirection[1]
+        );
+        float xStep = -headForwardDirection[0] / r;
+        float zStep = -headForwardDirection[2] / r;
+        if (isMoving && lastTime != -1) {
+            cameraPosition[0] += 0.5f / 1000 * (currentTime - lastTime) * xStep;
+            cameraPosition[2] += 0.5f / 1000 * (currentTime - lastTime) * zStep;
+        }
+        lastTime = currentTime;
+    }
 
     @Override
     public void onDrawEye(Eye eye) {
@@ -185,8 +291,10 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
 
         Matrix.setLookAtM(
                 camera, 0,
-                0.0f, 0.0f, 0.0f,
-                0.0f, 0.0f, -1.0f,
+                cameraPosition[0], cameraPosition[1], cameraPosition[2],
+                cameraPosition[0] + cameraDirection[0],
+                cameraPosition[1] + cameraDirection[1],
+                cameraPosition[2] + cameraDirection[2],
                 0.0f, 1.0f, 0.0f
         );
         Matrix.multiplyMM(
@@ -195,6 +303,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
                 camera, 0
         );
         float[] perspective = eye.getPerspective(Z_NEAR, Z_FAR);
+
         Matrix.multiplyMM(
                 modelViewProjection, 0,
                 perspective, 0,
@@ -211,12 +320,38 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
                 modelViewProjection, 0
         );
         Utility.checkGlError("glUniformMatrix4fv");
-
-        wallTexture.bind();
-        testRect.draw();
+        for (MeshedRectangle door: doorRect) {
+            doorTexture.bind();
+            door.draw();
+        }
+        for (MeshedRectangle floor: floorRect) {
+            floorTexture.bind();
+            floor.draw();
+        }
+        for (MeshedRectangle wall: wallRect) {
+            wallTexture.bind();
+            wall.draw();
+        }
         Utility.checkGlError("testRect.draw()");
     }
 
     @Override
     public void onFinishFrame(Viewport viewport) {}
+
+
+    @Override
+    public void onCardboardTrigger() {
+        isMoving = true;
+    }
+
+    @Override
+    public boolean onTouchEvent(MotionEvent e) {
+        switch (e.getAction()) {
+            case MotionEvent.ACTION_UP:
+                Log.i("ACTION", "released...");
+                isMoving = false;
+                break;
+        }
+        return true;
+    }
 }
