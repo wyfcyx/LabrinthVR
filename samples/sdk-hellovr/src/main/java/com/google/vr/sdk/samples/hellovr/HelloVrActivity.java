@@ -34,6 +34,10 @@ import com.google.vr.sdk.base.GvrView;
 import com.google.vr.sdk.base.HeadTransform;
 import com.google.vr.sdk.base.Viewport;
 import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.FloatBuffer;
+import java.nio.ShortBuffer;
 import java.util.ArrayList;
 import java.util.Random;
 import javax.microedition.khronos.egl.EGLConfig;
@@ -95,15 +99,33 @@ public class HelloVrActivity extends GvrActivity implements GvrView.StereoRender
         "void main() {",
         "  // The y coordinate of this sample's textures is reversed compared to",
         "  // what OpenGL expects, so we invert the y coordinate.",
-        "  gl_FragColor = texture2D(u_Texture, vec2(v_UV.x, 1.0 - v_UV.y));",
+        "    gl_FragColor = vec4(1.0, 0.5, 0.2, 1.0);",
+        //"  gl_FragColor = texture2D(u_Texture, vec2(v_UV.x, 1.0 - v_UV.y));",
         "}",
       };
+  private static final String[] PURE_VERTEX_SHADER_CODE = new String[] {
+          "uniform mat4 u_MVP;",
+          "attribute vec4 a_Position;",
+          "void main() {",
+          "    gl_Position = u_MVP * a_Position;",
+          "}"
+  };
+  private static final String[] PURE_FRAGMENT_SHADER_CODE = new String[] {
+          "precision mediump float;",
+          "void main() {",
+          "    gl_FragColor = vec4(1.0, 0.5, 0.2, 1.0);",
+          "}"
+  };
 
   private int objectProgram;
 
   private int objectPositionParam;
   private int objectUvParam;
   private int objectModelViewProjectionParam;
+
+  private int pureProgram;
+  private int purePositionParam;
+  private int pureModelViewProjectionParam;
 
   private float targetDistance = MAX_TARGET_DISTANCE;
 
@@ -140,6 +162,8 @@ public class HelloVrActivity extends GvrActivity implements GvrView.StereoRender
 
   private TextView textView;
 
+  private FloatBuffer vertexBuffer;
+  private ShortBuffer indiceBuffer;
   /**
    * Sets the view to our GvrView and initializes the transformation matrices we will use
    * to render our scene.
@@ -166,9 +190,6 @@ public class HelloVrActivity extends GvrActivity implements GvrView.StereoRender
     gvrAudioEngine = new GvrAudioEngine(this, GvrAudioEngine.RenderingMode.BINAURAL_HIGH_QUALITY);
 
     random = new Random();
-
-    textView  = (TextView) findViewById(R.id.textView);
-    textView.setText("Hello VR World!");
 
   }
 
@@ -239,12 +260,22 @@ public class HelloVrActivity extends GvrActivity implements GvrView.StereoRender
     Log.i(TAG, "onSurfaceCreated");
     GLES20.glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 
+
     objectProgram = Util.compileProgram(OBJECT_VERTEX_SHADER_CODE, OBJECT_FRAGMENT_SHADER_CODE);
 
     objectPositionParam = GLES20.glGetAttribLocation(objectProgram, "a_Position");
     objectUvParam = GLES20.glGetAttribLocation(objectProgram, "a_UV");
     objectModelViewProjectionParam = GLES20.glGetUniformLocation(objectProgram, "u_MVP");
 
+    pureProgram = Util.compileProgram(PURE_VERTEX_SHADER_CODE, PURE_FRAGMENT_SHADER_CODE);
+    purePositionParam = GLES20.glGetAttribLocation(
+            pureProgram,
+            "a_Position"
+    );
+    pureModelViewProjectionParam = GLES20.glGetUniformLocation(
+            pureProgram,
+            "u_MVP"
+    );
     Util.checkGlError("Object program params");
 
     Matrix.setIdentityM(modelRoom, 0);
@@ -363,26 +394,87 @@ public class HelloVrActivity extends GvrActivity implements GvrView.StereoRender
 
     Matrix.multiplyMM(modelView, 0, view, 0, modelTarget, 0);
     Matrix.multiplyMM(modelViewProjection, 0, perspective, 0, modelView, 0);
-    drawTarget();
+    //drawTarget();
 
     // Set modelView for the room, so it's drawn in the correct location
     Matrix.multiplyMM(modelView, 0, view, 0, modelRoom, 0);
     Matrix.multiplyMM(modelViewProjection, 0, perspective, 0, modelView, 0);
-    drawRoom();
+    //drawRoom();
+
+    Matrix.multiplyMM(modelViewProjection, 0, perspective, 0, view, 0);
+    drawTriangle();
   }
 
   @Override
   public void onFinishFrame(Viewport viewport) {}
 
+  public void drawTriangle() {
+    float[] triangleCoord = new float[]{
+            -0.5f, -0.5f, -1.0f,
+            0.5f, -0.5f, -1.0f,
+            0.0f, 0.5f, -1.0f
+    };
+    //vertexBuffer = FloatBuffer.allocate(9);
+    //for (float _: triangleCoord) { vertexBuffer.put(_); }
+    //vertexBuffer.put(triangleCoord);
+    //vertexBuffer.position(0);
+    ByteBuffer byteVertex = ByteBuffer.allocateDirect(triangleCoord.length * 4);
+    byteVertex.order(ByteOrder.nativeOrder());
+    vertexBuffer = byteVertex.asFloatBuffer();
+    vertexBuffer.put(triangleCoord);
+    vertexBuffer.position(0);
+    short[] triangleIndices = new short[]{
+            0, 1, 2
+    };
+    //indiceBuffer = ShortBuffer.allocate(3);
+    //indiceBuffer.put(triangleIndices);
+    //indiceBuffer.position(0);
+    //for (short _: triangleIndices) { indiceBuffer.put(_); }
+    ByteBuffer byteIndice = ByteBuffer.allocateDirect(triangleIndices.length * 2);
+    byteIndice.order(ByteOrder.nativeOrder());
+    indiceBuffer = byteIndice.asShortBuffer();
+    indiceBuffer.put(triangleIndices);
+    indiceBuffer.position(0);
+
+    GLES20.glUseProgram(pureProgram);
+
+    //Matrix.setIdentityM(modelViewProjection, 0);
+    GLES20.glUniformMatrix4fv(
+            pureModelViewProjectionParam,
+            1,
+            false,
+            modelViewProjection, 0
+    );
+
+    GLES20.glEnableVertexAttribArray(purePositionParam);
+    GLES20.glVertexAttribPointer(
+            purePositionParam,
+            3,
+            GLES20.GL_FLOAT,
+            false,
+            0,
+            vertexBuffer
+    );
+
+    GLES20.glDrawElements(
+            GLES20.GL_TRIANGLES,
+            indiceBuffer.limit(),
+            GLES20.GL_UNSIGNED_SHORT,
+            indiceBuffer
+    );
+  }
   /** Draw the target object. */
   public void drawTarget() {
-    GLES20.glUseProgram(objectProgram);
+    //GLES20.glUseProgram(objectProgram);
+    GLES20.glUseProgram(pureProgram);
     GLES20.glUniformMatrix4fv(objectModelViewProjectionParam, 1, false, modelViewProjection, 0);
+    /*
     if (isLookingAtTarget()) {
       targetObjectSelectedTextures.get(curTargetObject).bind();
     } else {
       targetObjectNotSelectedTextures.get(curTargetObject).bind();
     }
+    */
     targetObjectMeshes.get(curTargetObject).draw();
     Util.checkGlError("drawTarget");
   }

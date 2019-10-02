@@ -79,8 +79,8 @@ import java.nio.ShortBuffer;
   public void draw() {
     GLES20.glEnableVertexAttribArray(positionAttrib);
     GLES20.glVertexAttribPointer(positionAttrib, 3, GLES20.GL_FLOAT, false, 0, vertices);
-    GLES20.glEnableVertexAttribArray(uvAttrib);
-    GLES20.glVertexAttribPointer(uvAttrib, 2, GLES20.GL_FLOAT, false, 0, uv);
+    //GLES20.glEnableVertexAttribArray(uvAttrib);
+    //GLES20.glVertexAttribPointer(uvAttrib, 2, GLES20.GL_FLOAT, false, 0, uv);
     GLES20.glDrawElements(GLES20.GL_TRIANGLES, indices.limit(), GLES20.GL_UNSIGNED_SHORT, indices);
   }
 }
