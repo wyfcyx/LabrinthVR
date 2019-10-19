@@ -1,6 +1,7 @@
 package com.shinbokuow.labyrinthvr;
 
 import android.opengl.GLES20;
+import android.opengl.Matrix;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
@@ -14,9 +15,10 @@ public class MeshedRectangle {
     private FloatBuffer vertexBuffer;
     private FloatBuffer uvBuffer;
     private ShortBuffer indiceBuffer;
+    private float[] coordinates;
     /* x, y, z of TopRight, TopLeft, BottomLeft, BottomRight */
     public MeshedRectangle(float[] _coordinates, int offset, int _objectPositionParam, int _objectUVParam) {
-        float[] coordinates = new float[12];
+        coordinates = new float[12];
         for (int i = 0; i < 12; ++i)
             coordinates[i] = _coordinates[offset + i];
         objectPositionParam = _objectPositionParam;
@@ -78,5 +80,28 @@ public class MeshedRectangle {
                 indiceBuffer
         );
 
+    }
+    public boolean isVisible(float[] modelViewProjection) {
+        // if four vertexes are all not visible,
+        // then this rectangle will be discarded
+        boolean canSee = false;
+        for (int v = 0; v < 4; ++v) {
+            float[] coor = new float[] {
+                  coordinates[3 * v],
+                  coordinates[3 * v + 1],
+                  coordinates[3 * v + 2],
+                  1.0f
+            };
+            Matrix.multiplyMV(
+                    coor, 0,
+                    modelViewProjection, 0,
+                    coor, 0
+            );
+            if (Math.abs(coor[0]) < coor[3] && Math.abs(coor[1]) < coor[3] && Math.abs(coor[2]) < coor[3]) {
+                canSee = true;
+                break;
+            }
+        }
+        return canSee;
     }
 }

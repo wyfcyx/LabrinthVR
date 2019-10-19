@@ -57,22 +57,23 @@ public class Segment2D {
         return intersection;
     }
     public static void getSegmentIntersection(Segment2D A, Segment2D B) {
-        Log.i(TAG, "getSegmentIntersectionBegin");
+        //Log.i(TAG, "getSegmentIntersectionBegin");
         // assume that at most one intersection
         intersect = false;
         // check parallel
         if (dcmp(A.v.cross(B.v)) == 0) {
-            Log.i(TAG, "parallel");
-            Log.i(TAG, "getSegmentIntersectionEnd");
+            //Log.i(TAG, "parallel");
+            //Log.i(TAG, "getSegmentIntersectionEnd");
             return;
         }
         // find intersection
         double stepA = B.p.dec(A.p).cross(B.v) / A.v.cross(B.v);
-        Log.i(TAG, "stepA=" + String.valueOf(stepA));
+        //Log.i(TAG, "stepA=" + String.valueOf(stepA));
         intersection = A.p.inc(A.v.scaMul(stepA));
-        Log.i(TAG, "intersection=" + intersection.toString());
+        //Log.i(TAG, "intersection=" + intersection.toString());
         if (stepA >= -EPSILON && stepA <= 1 + EPSILON && B.onSegment(intersection))
             intersect = true;
+        /*
         if (intersect) {
             Log.i(TAG, "passed B test");
         }
@@ -80,5 +81,6 @@ public class Segment2D {
             Log.i(TAG, "B test failed");
         }
         Log.i(TAG, "getSegmentIntersectionEnd");
+        */
     }
 }

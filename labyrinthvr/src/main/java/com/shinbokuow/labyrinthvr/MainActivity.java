@@ -1,5 +1,6 @@
 package com.shinbokuow.labyrinthvr;
 
+import android.graphics.Point;
 import android.opengl.GLES20;
 import android.opengl.Matrix;
 import android.os.Bundle;
@@ -50,8 +51,9 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
     private int objectUVParam;
     private int objectModelViewProjectionParam;
 
+    private static final int N = 15;
     private static final float Z_NEAR = 0.01f;
-    private static final float Z_FAR = 10.0f;
+    private static final float Z_FAR = (float)(2 * N + 1);
 
     private float[] camera;
     private float[] view;
@@ -64,8 +66,12 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
 
     private boolean isMoving;
     private long lastTime;
+    private static final float SPEED_PER_MS = 1.5f / 1000;
 
     private SegmentTriggerSystem triggerSystem;
+
+    private int[][] map;
+    private static final float AIR_WALL_DISTANCE = .15f;
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -87,6 +93,7 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         //model = new float[16];
         //modelView = new float[16];
         triggerSystem = new SegmentTriggerSystem();
+
     }
 
     public void initialGvrView() {
@@ -153,122 +160,6 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         );
         Log.i("TAG", "objectMVP = " + String.valueOf(objectModelViewProjectionParam));
 
-        cameraPosition[0] = 0.5f;
-        cameraPosition[1] = 0.7f;
-        cameraPosition[2] = 1.5f;
-        cameraDirection[0] = 0.0f;
-        cameraDirection[1] = 0.0f;
-        cameraDirection[2] = 1.0f;
-
-        float[] testRectCoord = new float[]{
-            /* TopRight */ 1.0f, 1.0f, -5.0f,
-            /* TopLeft */ -1.0f, 1.0f, -5.0f,
-            /* BottomLeft */ -1.0f, -1.0f, -5.0f,
-            /* BottomRight */ 1.0f, -1.0f, -5.0f
-        };
-
-        doorRect = new ArrayList<>();
-        wallRect = new ArrayList<>();
-        floorRect = new ArrayList<>();
-        ceilingRect = new ArrayList<>();
-        float[] frontDoor = new float[] {
-                1.0f, 1.0f, 3.0f,
-                0.0f, 1.0f, 3.0f,
-                0.0f, 0.0f, 3.0f,
-                1.0f, 0.0f, 3.0f
-        };
-        doorRect.add(
-                new MeshedRectangle(
-                        frontDoor, 0,
-                        objectPositionParam,
-                        objectUVParam
-                )
-        );
-        triggerSystem.addSegmentTrigger(
-                new SegmentTrigger(
-                        new Segment2D(0.0, 2.75, 1.0, 2.75),
-                        new Point2D(0.0, -1.0),
-                        SegmentTrigger.TriggerType.BOUND_TRIGGER
-                )
-        );
-        float[] backDoor = new float[] {
-                0.0f, 1.0f, 0.0f,
-                1.0f, 1.0f, 0.0f,
-                1.0f, 0.0f, 0.0f,
-                0.0f, 0.0f, 0.0f
-        };
-        doorRect.add(
-                new MeshedRectangle(
-                        backDoor, 0,
-                        objectPositionParam,
-                        objectUVParam
-                )
-        );
-        triggerSystem.addSegmentTrigger(
-                new SegmentTrigger(
-                        new Segment2D(0.0, 0.25, 1.0, 0.25),
-                        new Point2D(0.0, 1.0),
-                        SegmentTrigger.TriggerType.BOUND_TRIGGER
-                )
-        );
-        for (int z = 1; z <= 3; ++z) {
-            float[] floor = new float[] {
-                    1.0f, 0.0f, (float)z,
-                    0.0f, 0.0f, (float)z,
-                    0.0f, 0.0f, (float)(z - 1),
-                    1.0f, 0.0f, (float)(z - 1)
-            };
-            floorRect.add(
-                    new MeshedRectangle(
-                            floor, 0,
-                            objectPositionParam,
-                            objectUVParam
-                    )
-            );
-
-            float[] leftWall = new float[] {
-                    0.0f, 1.0f, (float)z,
-                    0.0f, 1.0f, (float)(z - 1),
-                    0.0f, 0.0f, (float)(z - 1),
-                    0.0f, 0.0f, (float)z
-            };
-            wallRect.add(
-                    new MeshedRectangle(
-                            leftWall, 0,
-                            objectPositionParam,
-                            objectUVParam
-                    )
-            );
-            triggerSystem.addSegmentTrigger(
-                    new SegmentTrigger(
-                            new Segment2D(0.25, (double)(z - 1), 0.25, (double)z),
-                            new Point2D(1.0, 0.0),
-                            SegmentTrigger.TriggerType.BOUND_TRIGGER
-                    )
-            );
-            /* x 1,1,1,1 y 1,1,0,0 z z-1,z,z,z-1 */
-            float[] rightWall = new float[] {
-                    1.0f, 1.0f, (float)(z - 1),
-                    1.0f, 1.0f, (float)z,
-                    1.0f, 0.0f, (float)z,
-                    1.0f, 0.0f, (float)(z - 1)
-            };
-            wallRect.add(
-                    new MeshedRectangle(
-                            rightWall, 0,
-                            objectPositionParam,
-                            objectUVParam
-                    )
-            );
-            triggerSystem.addSegmentTrigger(
-                    new SegmentTrigger(
-                            new Segment2D(0.75, (double)(z - 1), 0.75, (double)z),
-                            new Point2D(-1.0, 0.0),
-                            SegmentTrigger.TriggerType.BOUND_TRIGGER
-                    )
-            );
-        }
-
         try {
             wallTexture = new Texture(
                     this,
@@ -287,10 +178,182 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
             e.printStackTrace();
         }
 
+        sceneReset();
+
+    }
+    private void sceneReset() {
+        doorRect = new ArrayList<>();
+        wallRect = new ArrayList<>();
+        floorRect = new ArrayList<>();
+        ceilingRect = new ArrayList<>();
+        triggerSystem.reset();
+
         isMoving = false;
         lastTime = -1;
-    }
 
+        cameraPosition[0] = 1.5f;
+        cameraPosition[1] = 1.7f;
+        cameraPosition[2] = 1.5f;
+        cameraDirection[0] = 0.0f;
+        cameraDirection[1] = 0.0f;
+        cameraDirection[2] = 1.0f;
+
+        map = new LabGenerator().generate(N);
+        for (int z = 0; z < 2 * N + 1; ++z) {
+            for (int x = 0; x < 2 * N + 1; ++x) {
+                Log.i("Main", "z="+String.valueOf(z)+",x="+String.valueOf(x)+",(z,x)="+String.valueOf(map[z][x]));
+                if (map[z][x] == 1) {
+                    // a wall
+                    float[] wall = null;
+                    Point2D direction = null;
+                    Point2D p1 = null, p2 = null;
+                    if (x - 1 >= 0 && map[z][x - 1] == 0) {
+                        // a right wall
+                        for (int y = 0; y < 2; ++y) {
+                            wall = new float[]{
+                                    (float) x, 1.0f + y, (float) z,
+                                    (float) x, 1.0f + y, (float) (z + 1),
+                                    (float) x, 0.0f + y, (float) (z + 1),
+                                    (float) x, 0.0f + y, (float) z
+                            };
+                            addRect(wallRect, wall);
+                        }
+                        direction = new Point2D(-1.0f, 0.0f);
+                        p1 = new Point2D((float) x, (float) z);
+                        p2 = new Point2D((float) x, (float) (z + 1));
+                        addBoundTrigger(
+                                direction,
+                                p1, new Point2D(0.0f, -1.0f),
+                                p2, new Point2D(0.0f, 1.0f)
+                        );
+                    }
+                    if (x + 1 < 2 * N + 1 && map[z][x + 1] == 0) {
+                        // a left wall
+                        for (int y = 0; y < 2; ++y) {
+                            wall = new float[]{
+                                    (float) (x + 1), 1.0f + y, (float) z,
+                                    (float) (x + 1), 1.0f + y, (float) (z + 1),
+                                    (float) (x + 1), 0.0f + y, (float) (z + 1),
+                                    (float) (x + 1), 0.0f + y, (float) z
+                            };
+                            addRect(wallRect, wall);
+                        }
+                        direction = new Point2D(1.0f, 0.0f);
+                        p1 = new Point2D((float) (x + 1), (float) z);
+                        p2 = new Point2D((float) (x + 1), (float) (z + 1));
+                        addBoundTrigger(
+                                direction,
+                                p1, new Point2D(0.0f, -1.0f),
+                                p2, new Point2D(0.0f, 1.0f)
+                        );
+                    }
+                    if (z - 1 >= 0 && map[z - 1][x] == 0) {
+                        // a down wall
+                        for (int y = 0; y < 2; ++y) {
+                            wall = new float[]{
+                                    (float) x, 1.0f + y, (float) z,
+                                    (float) (x + 1), 1.0f + y, (float) z,
+                                    (float) (x + 1), 0.0f + y, (float) z,
+                                    (float) x, 0.0f + y, (float) z
+                            };
+                            if (x == 2 * N - 1 && z == 2 * N && y == 1)
+                                addRect(doorRect, wall);
+                            else
+                                addRect(wallRect, wall);
+                        }
+                        direction = new Point2D(0.0f, -1.0f);
+                        p1 = new Point2D((float) x, (float) z);
+                        p2 = new Point2D((float) (x + 1), (float) z);
+                        if (x == 2 * N - 1 && z == 2 * N) {
+                            addExitTrigger(
+                                    direction,
+                                    p1, new Point2D(-1.0f, 0.0f),
+                                    p2, new Point2D(1.0f, 0.0f)
+                            );
+                        }
+                        else {
+                            addBoundTrigger(
+                                    direction,
+                                    p1, new Point2D(-1.0f, 0.0f),
+                                    p2, new Point2D(1.0f, 0.0f)
+                            );
+                        }
+
+                    }
+                    if (z + 1 < 2 * N + 1 && map[z + 1][x] == 0) {
+                        // a up wall
+                        for (int y = 0; y < 2; ++y) {
+                            wall = new float[]{
+                                    (float) (x + 1), 1.0f + y, (float) (z + 1),
+                                    (float) x, 1.0f + y, (float) (z + 1),
+                                    (float) x, 0.0f + y, (float) (z + 1),
+                                    (float) (x + 1), 0.0f + y, (float) (z + 1)
+                            };
+                            addRect(wallRect, wall);
+                        }
+                        direction = new Point2D(0.0f, 1.0f);
+                        p1 = new Point2D((float) x, (float) (z + 1));
+                        p2 = new Point2D((float) (x + 1), (float) (z + 1));
+                        //addBoundTrigger(direction, p1, p2);
+                        addBoundTrigger(
+                                direction,
+                                p1, new Point2D(-1.0f, 0.0f),
+                                p2, new Point2D(1.0f, 0.0f)
+                        );
+
+                    }
+                }
+                else {
+                    // a floor
+                    float[] floor = new float[] {
+                            (float)x, 0.0f, (float)z,
+                            (float)(x + 1), 0.0f, (float)z,
+                            (float)(x + 1), 0.0f, (float)(z + 1),
+                            (float)x, 0.0f, (float)(z + 1)
+                    };
+                    floorRect.add(
+                            new MeshedRectangle(
+                                    floor, 0,
+                                    objectPositionParam,
+                                    objectUVParam
+                            )
+                    );
+
+                }
+            }
+        }
+    }
+    private void addRect(ArrayList<MeshedRectangle> list, float[] wall) {
+        list.add(
+                new MeshedRectangle(
+                        wall, 0,
+                        objectPositionParam,
+                        objectUVParam
+                )
+        );
+    }
+    private void addBoundTrigger(Point2D direction, Point2D p1, Point2D p1Out, Point2D p2, Point2D p2Out) {
+        p1 = p1.inc(direction.inc(p1Out).scaMul(AIR_WALL_DISTANCE));
+        p2 = p2.inc(direction.inc(p2Out).scaMul(AIR_WALL_DISTANCE));
+        triggerSystem.addSegmentTrigger(
+                new SegmentTrigger(
+                        new Segment2D(p1, p2),
+                        direction,
+                        SegmentTrigger.TriggerType.BOUND_TRIGGER
+                )
+        );
+    }
+    private void addExitTrigger(Point2D direction, Point2D p1, Point2D p1Out, Point2D p2, Point2D p2Out) {
+        p1 = p1.inc(direction.inc(p1Out).scaMul(AIR_WALL_DISTANCE));
+        p2 = p2.inc(direction.inc(p2Out).scaMul(AIR_WALL_DISTANCE));
+        triggerSystem.addSegmentTrigger(
+                new SegmentTrigger(
+                        new Segment2D(p1, p2),
+                        direction,
+                        SegmentTrigger.TriggerType.EXIT_TRIGGER
+                )
+        );
+    }
     private String loadCode(String codePath) {
         String code = "";
         String line = "";
@@ -319,34 +382,53 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
         );
         float r = (float)Math.sqrt(
                 headForwardDirection[0] * headForwardDirection[0] +
-                headForwardDirection[1] * headForwardDirection[1]
+                headForwardDirection[2] * headForwardDirection[2]
         );
         float xStep = -headForwardDirection[0] / r;
         float zStep = -headForwardDirection[2] / r;
         if (isMoving && lastTime != -1) {
-            float nextx = cameraPosition[0] + 0.5f / 1000 * (currentTime - lastTime) * xStep;
-            float nextz = cameraPosition[2] + 0.5f / 1000 * (currentTime - lastTime) * zStep;
+            float nextx = cameraPosition[0] + SPEED_PER_MS * (currentTime - lastTime) * xStep;
+            float nextz = cameraPosition[2] + SPEED_PER_MS * (currentTime - lastTime) * zStep;
             // handling collides through triggerSystem
+            long triggerCost = System.currentTimeMillis();
             SegmentTrigger trigger = triggerSystem.getTrigger(
                     new Segment2D(
                             new Point2D(cameraPosition[0], cameraPosition[2]),
                             new Point2D(nextx, nextz)
                     )
             );
+            Log.i("Main", "triggerCost = " + String.valueOf(System.currentTimeMillis() - triggerCost));
             if (trigger != null) {
                 if (trigger.getTriggerType() == SegmentTrigger.TriggerType.BOUND_TRIGGER) {
+                    Log.i("Main", "BOUND_TRIGGER");
                     Point2D intersection = trigger.getIntersection();
                     cameraPosition[0] = (float)intersection.getX();
                     cameraPosition[2] = (float)intersection.getY();
                 }
+                else if (trigger.getTriggerType() == SegmentTrigger.TriggerType.EXIT_TRIGGER) {
+                    Log.i("Main", "EXIT_TRIGGER");
+                    sceneReset();
+                }
             }
             else {
+                Log.i("Main", "NO_TRIGGER");
                 // no collide found
                 cameraPosition[0] = nextx;
                 cameraPosition[2] = nextz;
             }
         }
+
+
+        Log.i(
+                "Main",
+                "updated position:" +
+                        " x = " + String.valueOf(cameraPosition[0]) +
+                        " y = " + String.valueOf(cameraPosition[1]) +
+                        " z = " + String.valueOf(cameraPosition[2])
+        );
+        Log.i("Main", "FrameTime = " + String.valueOf(currentTime - lastTime) + "ms");
         lastTime = currentTime;
+
     }
 
     @Override
@@ -385,19 +467,21 @@ public class MainActivity extends GvrActivity implements GvrView.StereoRenderer 
                 modelViewProjection, 0
         );
         Utility.checkGlError("glUniformMatrix4fv");
+        doorTexture.bind();
         for (MeshedRectangle door: doorRect) {
-            doorTexture.bind();
             door.draw();
         }
+        floorTexture.bind();
         for (MeshedRectangle floor: floorRect) {
-            floorTexture.bind();
             floor.draw();
         }
+        wallTexture.bind();
         for (MeshedRectangle wall: wallRect) {
-            wallTexture.bind();
             wall.draw();
         }
         Utility.checkGlError("testRect.draw()");
+        //Log.i("Main", "discarded = " + String.valueOf(discarded));
+        //Log.i("Main", "total = " + String.valueOf(total));
     }
 
     @Override

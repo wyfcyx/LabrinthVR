@@ -16,15 +16,18 @@ public class SegmentTriggerSystem {
         triggers.add(trigger);
     }
 
+    public void reset() {
+        triggers.clear();
+    }
     public SegmentTrigger getTrigger(Segment2D moveSegment) {
         SegmentTrigger nearestTrigger = null;
         double distance = 1e8, nDistance;
-        Log.i(TAG, "getTriggerBegin");
-        Log.i(TAG, "move=" + moveSegment.toString());
+        //Log.i(TAG, "getTriggerBegin");
+        //Log.i(TAG, "move=" + moveSegment.toString());
 
 
         for (SegmentTrigger trigger: triggers) {
-            Log.i(TAG, "this trigger is=" + trigger.getSegment().toString());
+            //Log.i(TAG, "this trigger is=" + trigger.getSegment().toString());
             if (trigger.tryIntersection(moveSegment)) {
                 nDistance = Point2D.distance(
                         moveSegment.getStartPoint(),
@@ -36,7 +39,7 @@ public class SegmentTriggerSystem {
                 }
             }
         }
-        Log.i(TAG, "getTriggerEnd");
+        //Log.i(TAG, "getTriggerEnd");
 
         return nearestTrigger;
     }
