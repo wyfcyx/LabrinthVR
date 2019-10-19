@@ -1,6 +1,5 @@
 package com.shinbokuow.labyrinthvr;
 
-import android.graphics.Point;
 import android.opengl.GLES20;
 import android.opengl.Matrix;
 import android.os.Bundle;
@@ -8,8 +7,6 @@ import android.util.Log;
 import android.view.MotionEvent;
 
 import com.google.vr.ndk.base.Properties;
-import com.google.vr.ndk.base.Properties.PropertyType;
-import com.google.vr.ndk.base.Value;
 import com.google.vr.sdk.audio.GvrAudioEngine;
 import com.google.vr.sdk.base.AndroidCompat;
 import com.google.vr.sdk.base.Eye;
